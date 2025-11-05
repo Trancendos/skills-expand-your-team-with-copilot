@@ -50,6 +50,10 @@ jobs:
             
             CHANGED_FILES="$CHANGED_FILES $file"
           fi
+          
+          # Add more deprecated action checks here as needed
+          # Example: actions/setup-node@v1, actions/upload-artifact@v1, etc.
+          # This makes the workflow extensible for future deprecated actions
         done
         
         echo "found_deprecated=$FOUND_DEPRECATED" >> $GITHUB_OUTPUT
