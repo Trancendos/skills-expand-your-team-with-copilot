@@ -1,0 +1,100 @@
+name: Auto Fix Deprecated Actions
+
+on:
+  schedule:
+    # Run weekly on Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-fix-deprecated-actions:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+    
+    - name: Scan for deprecated actions
+      id: scan
+      run: |
+        echo "Scanning for deprecated actions in workflow files..."
+        
+        # Find all workflow files
+        WORKFLOW_FILES=$(find .github/workflows -name "*.yml" -o -name "*.yaml")
+        
+        # Track if we found any deprecated actions
+        FOUND_DEPRECATED=false
+        CHANGED_FILES=""
+        
+        for file in $WORKFLOW_FILES; do
+          # Check for deprecated actions/cache versions (v1, v2, v3)
+          if grep -q "actions/cache@v[123]" "$file"; then
+            echo "Found deprecated actions/cache in: $file"
+            FOUND_DEPRECATED=true
+            
+            # Update deprecated versions to v4
+            sed -i 's/actions\/cache@v1/actions\/cache@v4/g' "$file"
+            sed -i 's/actions\/cache@v2/actions\/cache@v4/g' "$file"
+            sed -i 's/actions\/cache@v3/actions\/cache@v4/g' "$file"
+            
+            CHANGED_FILES="$CHANGED_FILES $file"
+          fi
+          
+          # Add more deprecated action checks here as needed
+          # Example: actions/setup-node@v1, actions/upload-artifact@v1, etc.
+          # This makes the workflow extensible for future deprecated actions
+        done
+        
+        echo "found_deprecated=$FOUND_DEPRECATED" >> $GITHUB_OUTPUT
+        echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+    
+    - name: Create Pull Request
+      if: steps.scan.outputs.found_deprecated == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update deprecated actions/cache to v4'
+        title: 'chore: Update deprecated actions/cache to v4'
+        body: |
+          ## Automated Fix: Deprecated Actions
+          
+          This PR automatically updates deprecated `actions/cache` versions to the latest v4.
+          
+          ### Changes
+          - Updated `actions/cache@v1` to `actions/cache@v4`
+          - Updated `actions/cache@v2` to `actions/cache@v4`
+          - Updated `actions/cache@v3` to `actions/cache@v4`
+          
+          ### Why v4?
+          - Improved performance and reliability
+          - Better caching strategies
+          - Active maintenance and security updates
+          - Deprecated versions may stop working in the future
+          
+          ### Files Modified
+          ${{ steps.scan.outputs.changed_files }}
+          
+          ---
+          *This PR was automatically created by the Auto Fix Deprecated Actions workflow*
+        branch: auto-fix-deprecated-actions
+        delete-branch: true
+        labels: |
+          automated
+          dependencies
+          chore
+    
+    - name: No deprecated actions found
+      if: steps.scan.outputs.found_deprecated == 'false'
+      run: |
+        echo "✅ No deprecated actions found. All workflows are up to date!"
